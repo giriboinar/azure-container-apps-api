@@ -1,0 +1,40 @@
+// Log Analytics (KQL) queries for the Task API on Azure Container Apps.
+// Run in the Log Analytics workspace linked to the Container Apps environment
+// (Logs blade), or paste into an Azure Monitor workbook.
+
+// 1. Recent application logs (newest first)
+ContainerAppConsoleLogs
+| where ContainerAppName == "tasks-api"
+| project TimeGenerated, Log, Stream
+| order by TimeGenerated desc
+| take 100
+
+// 2. Error rate over time (5xx from the ingress)
+ContainerAppConsoleLogs
+| where ContainerAppName == "tasks-api"
+| where Log contains "500" or Log contains "ERROR" or Log contains "Traceback"
+| summarize errors = count() by bin(TimeGenerated, 5m)
+| order by TimeGenerated asc
+
+// 3. Request latency p50 / p95 (uvicorn access logs)
+ContainerAppConsoleLogs
+| where ContainerAppName == "tasks-api"
+| where Log contains "HTTP/1.1"
+| extend ms = todouble(extract(@"([0-9.]+)ms", 1, Log))
+| where isnotnull(ms)
+| summarize p50 = percentile(ms, 50), p95 = percentile(ms, 95) by bin(TimeGenerated, 5m)
+| order by TimeGenerated asc
+
+// 4. Replica count over time (did autoscaling kick in?)
+ContainerAppSystemLogs
+| where ContainerAppName == "tasks-api"
+| where Reason == "Scaling"
+| project TimeGenerated, Reason, Log
+| order by TimeGenerated desc
+
+// 5. Liveness / readiness probe failures
+ContainerAppSystemLogs
+| where ContainerAppName == "tasks-api"
+| where Log contains "probe" and (Log contains "failed" or Log contains "Unhealthy")
+| project TimeGenerated, Log
+| order by TimeGenerated desc
