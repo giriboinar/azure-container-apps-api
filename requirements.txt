@@ -1,0 +1,13 @@
+# Runtime dependencies — pinned for CI/runtime parity (see README).
+# fastapi>=0.143: pulls starlette>=0.46 (pip-audit 2026-10-14 flagged
+# starlette 0.41.3 CVEs PYSEC-2026-248/249/1941/1942/2280/2281 — fixed in
+# starlette>=1.3.1). Matches the fastapi line used in mokku-journey-devops.
+fastapi==0.143.1
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+prometheus-client==0.21.1
+
+# Test-only dependencies (also pinned; installed in CI test job).
+# pytest>=9.0.3: fixes PYSEC-2026-1845 flagged in 8.3.4.
+pytest==9.0.3
+httpx==0.28.1
