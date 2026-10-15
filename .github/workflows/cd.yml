@@ -1,0 +1,51 @@
+# CD: deploy a published image to Azure Container Apps.
+#
+# Manual gate: this workflow ONLY runs via workflow_dispatch (a human clicks
+# "Run workflow" and picks the image tag). It never auto-deploys.
+#
+# One-time setup (repo Settings -> Secrets and variables -> Actions):
+#   AZURE_CREDENTIALS = service-principal JSON from:
+#     az ad sp create-for-rbac --name aca-deployer --role contributor \
+#       --scopes /subscriptions/<sub-id>/resourceGroups/<rg> --sdk-auth
+# The infrastructure itself is deployed separately from infra/bicep
+# (az deployment group create) — this workflow only swaps the image.
+
+name: CD — deploy to Azure Container Apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (immutable sha-... tag preferred)"
+        required: true
+        default: "latest"
+      resource_group:
+        description: "Azure resource group holding the Container App"
+        required: true
+        default: "rg-tasks-api"
+
+jobs:
+  deploy:
+    name: Deploy image to Container Apps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Update container image
+        run: |
+          az containerapp update \
+            --name tasks-api \
+            --resource-group "${{ inputs.resource_group }}" \
+            --image "giriboinar/azure-container-apps-api:${{ inputs.image_tag }}"
+
+      - name: Smoke test the deployment
+        run: |
+          FQDN=$(az containerapp show \
+            --name tasks-api \
+            --resource-group "${{ inputs.resource_group }}" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "Probing https://$FQDN/health"
+          curl -fsS --retry 5 --retry-delay 10 "https://$FQDN/health"

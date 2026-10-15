@@ -1,0 +1,84 @@
+# CI: test -> Docker build -> Trivy scan -> push to Docker Hub.
+#
+# The Docker Hub push runs ONLY when the repo secrets DOCKERHUB_USERNAME and
+# DOCKERHUB_TOKEN exist (they are configured on the sibling repos; add them
+# under Settings -> Secrets and variables -> Actions for this repo). Until
+# then the pipeline builds and scans but skips the push with a warning —
+# it never claims a push it did not do.
+
+name: CI — test, build, scan, push
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  IMAGE: giriboinar/azure-container-apps-api
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+  build-scan-push:
+    name: Build, scan, push
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (local, for scanning)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: tasks-api:ci-scan
+
+      - name: Trivy image scan — fail on HIGH/CRITICAL
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: tasks-api:ci-scan
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Log in to Docker Hub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push image to Docker Hub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' && github.ref == 'refs/heads/main' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            giriboinar/azure-container-apps-api:latest
+            giriboinar/azure-container-apps-api:sha-${{ github.sha }}
+
+      - name: Push skipped — Docker Hub secrets not configured
+        if: ${{ !(secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '') }}
+        run: |
+          echo "::warning::DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repo secrets are not set — image was built and scanned but NOT pushed. Add them under Settings -> Secrets and variables -> Actions to enable pushes."
