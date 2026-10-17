@@ -3,7 +3,11 @@
 # starlette 0.41.3 CVEs PYSEC-2026-248/249/1941/1942/2280/2281 — fixed in
 # starlette>=1.3.1). Matches the fastapi line used in mokku-journey-devops.
 fastapi==0.143.1
-uvicorn[standard]==0.34.0
+# NOTE (2026-10-17): plain uvicorn, not uvicorn[standard]. One of the [standard]
+# extras (watchfiles) ships no musllinux wheel for Python 3.12, which the
+# Alpine-based image requires — and the demo API does not need uvloop/httptools.
+# uvicorn's default h11 loop is sufficient here.
+uvicorn==0.34.0
 pydantic==2.10.4
 prometheus-client==0.21.1
 

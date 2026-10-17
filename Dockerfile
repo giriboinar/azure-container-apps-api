@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---------- builder: install deps into a venv (cached layer) ----------
-FROM python:3.12-slim-trixie AS builder
+FROM python:3.12-alpine3.24 AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -13,7 +13,7 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # ---------- runtime: minimal, non-root, health-checked ----------
-FROM python:3.12-slim-trixie AS runtime
+FROM python:3.12-alpine3.24 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -24,8 +24,8 @@ WORKDIR /srv
 COPY --from=builder /opt/venv /opt/venv
 COPY app ./app
 
-# Non-root user (least privilege). No shell needed at runtime.
-RUN useradd --no-create-home --shell /usr/sbin/nologin appuser \
+# Non-root user (least privilege). Alpine uses adduser, not useradd.
+RUN adduser -D -H -s /sbin/nologin appuser \
     && chown -R appuser:appuser /srv
 USER appuser
 
