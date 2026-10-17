@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---------- builder: install deps into a venv (cached layer) ----------
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim-trixie AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -13,7 +13,7 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # ---------- runtime: minimal, non-root, health-checked ----------
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-slim-trixie AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
